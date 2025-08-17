@@ -8,6 +8,7 @@ import pathlib
 import torchvision
 import datetime
 from tqdm import tqdm
+from torch.utils.tensorboard import SummaryWriter
 
 from train import RecurrentUNet, VideoDataset
 
@@ -39,20 +40,23 @@ if __name__ == '__main__':
     lr_disc = 2e-4
     L1_weigth = 100
     batch_size = 2
-    epochs = 50
+    epochs = 100
     sequence_len = 4
     size = (480, 270)
     dataset_loader_workers = 6
+    Gradient_intervals = 50
 
     # 数据集路径
     dataset_path = "D:\Dataset"
     # 继续训练时加载模型路径和已完成轮次，输入0则从零开始训练
-    load_model_epoch = 0
-    load_model_path_gen = "model-tanh\epoch_10.pth"
-    load_model_path_disc = ""
+    load_model_epoch = 12
+    load_model_path_gen = "model_gan\gen_epoch_12.pth"
+    load_model_path_disc = "model_gan\disc_epoch_12.pth"
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"Using device: {device}")
+
+    writer = SummaryWriter('runs/GAN')
 
     gen = RecurrentUNet(in_channels=4, out_channels=3).to(device)
     disc = VideoDiscriminator(in_channels=3).to(device)
@@ -79,10 +83,15 @@ if __name__ == '__main__':
     train_dataset = VideoDataset(root_dir=dataset_path, sequence_length=sequence_len, size=size)
     train_loader = DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=True,num_workers=dataset_loader_workers, pin_memory=False)
 
+    writer.add_graph(gen, next(iter(train_loader))[0].to(device))
+    writer.add_graph(disc, next(iter(train_loader))[1].permute(0, 2, 1, 3, 4).to(device))
+
     print("Start training...")
     for epoch in range(load_model_epoch, epochs):
         total_loss_g = 0.0
         total_loss_d = 0.0
+        total_loss_g_L1 = 0.0
+        total_loss_g_adv = 0.0
         gen.train()
         disc.train()
         with tqdm(total=len(train_loader), desc=f"Epoch {epoch + 1}/{epochs}", unit="batch") as pbar:
@@ -106,10 +115,16 @@ if __name__ == '__main__':
                 loss_disc_fake = adversarial_loss_fn(disc_fake, torch.zeros_like(disc_fake))
                 # 判别器总损失
                 loss_disc = (loss_disc_real + loss_disc_fake) / 2
-
                 loss_disc.backward()
+                # 记录梯度权重
+                if batch_idx % Gradient_intervals == 0:
+                    for name, param in disc.named_parameters():
+                        if param.grad is not None:
+                            # 使用 f-string 为每个梯度直方图创建唯一的、有组织的标签
+                            # 'Gradients/' 会在 TensorBoard 中创建一个名为 Gradients 的分组
+                            writer.add_histogram(
+                                tag=f'Grad_disc/{name}',values=param.grad,global_step=epoch * len(train_loader) + batch_idx)
                 opt_disc.step()
-                total_loss_d += loss_disc.item()
 
                 # 训练生成器
                 opt_gen.zero_grad()
@@ -118,10 +133,27 @@ if __name__ == '__main__':
                 loss_g_l1 = l1_loss_fn(clips_fake, clips_seq) * L1_weigth
                 loss_g = loss_g_adv + loss_g_l1
                 loss_g.backward()
+                if batch_idx % Gradient_intervals == 0:
+                    for name, param in gen.named_parameters():
+                        if param.grad is not None:
+                            writer.add_histogram(tag=f'Grad_gan/{name}',values=param.grad,global_step=epoch * len(train_loader) + batch_idx)
                 opt_gen.step()
+
+                # 统计记录
                 total_loss_g += loss_g.item()
+                total_loss_d += loss_disc.item()
+                total_loss_g_L1 += loss_g_l1.item()
+                total_loss_g_adv += loss_g_adv.item()
+                writer.add_scalar('Loss/loss_g_l1', loss_g_l1.item(), epoch * len(train_loader) + batch_idx)
+                writer.add_scalar('Loss/loss_g_adv', loss_g_adv.item(), epoch * len(train_loader) + batch_idx)
+                writer.add_scalar('Loss/loss_g', loss_g.item(), epoch * len(train_loader) + batch_idx)
+                writer.add_scalar('Loss/loss_disc', loss_disc.item(), epoch * len(train_loader) + batch_idx)
+                writer.add_scalar('Loss/D_real', loss_disc_real.item(), epoch * len(train_loader) + batch_idx)
+                writer.add_scalar('Loss/D_fake', loss_disc_fake.item(), epoch * len(train_loader) + batch_idx)
 
                 pbar.set_postfix(
+                    D_real=f'{loss_disc_real.item():.4f}',
+                    D_fake=f'{loss_disc_fake.item():.4f}',
                     Loss_D=f'{loss_disc.item():.4f}',
                     Loss_G=f'{loss_g.item():.4f}',
                     G_adv=f'{loss_g_adv.item():.4f}',
@@ -130,10 +162,13 @@ if __name__ == '__main__':
 
             avg_loss_g = total_loss_g / len(train_loader)
             avg_loss_d = total_loss_d / len(train_loader)
-            print(f"--- {datetime.datetime.now():%H:%M:%S}: Epoch {epoch + 1} avg_loss_G: {avg_loss_g:.4f}, avg_loss_D: {avg_loss_d:.4f} ---")
+            avg_loss_g_L1 = total_loss_g_L1 / len(train_loader)
+            avg_loss_d_adv = total_loss_g_adv / len(train_loader)
+            print(f"--- {datetime.datetime.now():%H:%M:%S}: Epoch {epoch + 1} avg_loss_G: {avg_loss_g:.4f}, avg_loss_D: {avg_loss_d:.4f}, avg_loss_g_L1: {avg_loss_g_L1:.4f}, avg_loss_d_adv: {avg_loss_d_adv:.4f} ---")
 
         pathlib.Path("model_gan").mkdir(parents=True, exist_ok=True)
         torch.save(gen.state_dict(), f"model_gan/gen_epoch_{epoch + 1}.pth")
         torch.save(disc.state_dict(), f"model_gan/disc_epoch_{epoch + 1}.pth")
 
+    writer.close()
     print("Completed!")
