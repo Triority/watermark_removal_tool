@@ -20,6 +20,7 @@ class VideoDiscriminator(nn.Module):
         # stride滑动步长，在时间维度上每次只移动1帧，在空间上每次移动2个像素，起到下采样的作用
         # padding输入视频数据块的三个维度的两侧填充0
         layers.append(nn.Conv3d(in_channels, features[0], kernel_size=(3, 4, 4), stride=(1, 2, 2), padding=(1, 1, 1)))
+        layers.append(nn.InstanceNorm3d(features[0]))
         # inplace=True会直接在存储输入数据的内存上进行计算并覆盖，节省一些GPU显存
         layers.append(nn.LeakyReLU(0.2, inplace=True))
 
@@ -46,17 +47,18 @@ if __name__ == '__main__':
     dataset_loader_workers = 6
     Gradient_intervals = 50
 
-    # 数据集路径
+    # 数据集和模型保存路径
     dataset_path = r"D:\Dataset"
+    model_save_dir = r"model_gan_2"
     # 继续训练时加载模型路径和已完成轮次，输入0则从零开始训练
-    load_model_epoch = 12
+    load_model_epoch = 0
     load_model_path_gen = r"model_gan\gen_epoch_12.pth"
     load_model_path_disc = r"model_gan\disc_epoch_12.pth"
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"Using device: {device}")
 
-    writer = SummaryWriter('runs/GAN')
+    writer = SummaryWriter('runs/GAN_2')
 
     gen = RecurrentUNet(in_channels=4, out_channels=3).to(device)
     disc = VideoDiscriminator(in_channels=3).to(device)
@@ -167,8 +169,8 @@ if __name__ == '__main__':
             print(f"--- {datetime.datetime.now():%H:%M:%S}: Epoch {epoch + 1} avg_loss_G: {avg_loss_g:.4f}, avg_loss_D: {avg_loss_d:.4f}, avg_loss_g_L1: {avg_loss_g_L1:.4f}, avg_loss_d_adv: {avg_loss_d_adv:.4f} ---")
 
         pathlib.Path("model_gan").mkdir(parents=True, exist_ok=True)
-        torch.save(gen.state_dict(), f"model_gan/gen_epoch_{epoch + 1}.pth")
-        torch.save(disc.state_dict(), f"model_gan/disc_epoch_{epoch + 1}.pth")
+        torch.save(gen.state_dict(), f"{model_save_dir}/gen_epoch_{epoch + 1}.pth")
+        torch.save(disc.state_dict(), f"{model_save_dir}/disc_epoch_{epoch + 1}.pth")
 
     writer.close()
     print("Completed!")

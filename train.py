@@ -17,10 +17,10 @@ class ConvBlock(nn.Module):
         self.convblock = nn.Sequential(
             nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1, bias=False),
             nn.BatchNorm2d(out_channels),
-            nn.ReLU(inplace=True),
+            nn.LeakyReLU(0.2, inplace=True),
             nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1, bias=False),
             nn.BatchNorm2d(out_channels),
-            nn.ReLU(inplace=True)
+            nn.LeakyReLU(0.2, inplace=True)
         )
 
     def forward(self, x):
@@ -43,6 +43,11 @@ class ConvLSTMCell(nn.Module):
                               kernel_size=self.kernel_size,
                               padding=self.padding,
                               bias=self.bias)
+        if bias:
+            # 初始化遗忘门的偏置为1.0，尽可能地保持打开
+            forget_gate_bias_start = hidden_dim
+            forget_gate_bias_end = 2 * hidden_dim
+            self.conv.bias.data[forget_gate_bias_start:forget_gate_bias_end].fill_(1.0)
 
     def forward(self, input_tensor, cur_state):
         h_cur, c_cur = cur_state
