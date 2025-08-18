@@ -106,12 +106,12 @@ def infer_video_4channel(config):
 
 if __name__ == '__main__':
     inference_config = {
-        "model_path": "model_gan/gen_epoch_17.pth",
+        "model_path": r"model_gan/gen_epoch_26.pth",
         # 这是需要修复的视频，例如视频中某些区域被涂黑或有水印
-        "input_video_path": "D:\Dataset\mask_clips\\14938.mp4",
+        "input_video_path": r"D:\Dataset\mask_clips\14938.mp4",
         # 这是对应的单张二值化掩膜图片，白色区域代表需要修复的地方
-        "mask_path": "D:\Dataset\masks\\14938.png",
-        "output_video_path": "restored_video.mp4",
+        "mask_path": r"D:\Dataset\masks\14938.png",
+        "output_video_path": r"restored_video.mp4",
         "input_size": (480, 270),
         "device": "cuda" if torch.cuda.is_available() else "cpu",
         "chunk_size": 10,

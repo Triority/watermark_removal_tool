@@ -220,13 +220,13 @@ if __name__ == '__main__':
     size = (480, 270)
     dataset_loader_workers = 6
 
-    dataset_path = "D:\Dataset"
+    dataset_path = r"D:\Dataset"
     # 继续训练时加载模型路径和已完成轮次，路径为空字符串则从零开始训练且设置的轮次无效
-    load_model_path = "model\epoch_10.pth"
+    load_model_path = r"model\epoch_10.pth"
     load_model_epoch = 10
 
 
-    writer = SummaryWriter('runs\gradient_monitoring')
+    writer = SummaryWriter(r'runs\gradient_monitoring')
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"Using device: {device}")
