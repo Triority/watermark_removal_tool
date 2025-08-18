@@ -48,12 +48,12 @@ if __name__ == '__main__':
     Gradient_intervals = 50
 
     # 数据集和模型保存路径
-    dataset_path = r"D:\Dataset"
+    dataset_path = r"D:/Dataset"
     model_save_dir = r"model_gan_2"
     # 继续训练时加载模型路径和已完成轮次，输入0则从零开始训练
     load_model_epoch = 7
-    load_model_path_gen = r"model_gan_2\gen_epoch_7.pth"
-    load_model_path_disc = r"model_gan_2\disc_epoch_7.pth"
+    load_model_path_gen = r"model_gan_2/gen_epoch_7.pth"
+    load_model_path_disc = r"model_gan_2/disc_epoch_7.pth"
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"Using device: {device}")
