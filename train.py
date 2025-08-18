@@ -23,8 +23,18 @@ class ConvBlock(nn.Module):
             nn.LeakyReLU(0.2, inplace=True)
         )
 
+        if in_channels != out_channels:
+            self.shortcut = nn.Sequential(
+                nn.Conv2d(in_channels, out_channels, kernel_size=1, stride=1, bias=False),
+                nn.BatchNorm2d(out_channels))
+        else:
+            self.shortcut = nn.Identity()
+
+        self.final_activation = nn.LeakyReLU(0.2, inplace=True)
+
     def forward(self, x):
-        return self.convblock(x)
+        out = self.convblock(x) + self.shortcut(x)
+        return self.final_activation(out)
 
 
 class ConvLSTMCell(nn.Module):
