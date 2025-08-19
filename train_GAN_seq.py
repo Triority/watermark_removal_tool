@@ -10,7 +10,8 @@ import datetime
 from tqdm import tqdm
 from torch.utils.tensorboard import SummaryWriter
 
-from train import RecurrentUNet, VideoDataset
+from model import RecurrentUNet, VideoDataset
+
 
 class VideoDiscriminator(nn.Module):
     def __init__(self, in_channels=3, features=[64, 128, 256, 512]):
@@ -25,7 +26,9 @@ class VideoDiscriminator(nn.Module):
         layers.append(nn.LeakyReLU(0.2, inplace=True))
 
         for i in range(len(features) - 1):
-            layers.append(nn.Conv3d(features[i], features[i + 1],kernel_size=(3, 4, 4), stride=(1, 2, 2), padding=(1, 1, 1), bias=False))
+            layers.append(
+                nn.Conv3d(features[i], features[i + 1], kernel_size=(3, 4, 4), stride=(1, 2, 2), padding=(1, 1, 1),
+                          bias=False))
             layers.append(nn.InstanceNorm3d(features[i + 1]))
             layers.append(nn.LeakyReLU(0.2, inplace=True))
 
@@ -41,11 +44,15 @@ if __name__ == '__main__':
     lr_disc = 1e-4
     L1_weigth = 50
 
-    batch_size = 1
     epochs = 100
-    sequence_len = 6
+    batch_size = 1
+    # 数据集加载的长度，应为数据集最短帧长度，输入低于此帧长度的数据将会报错
+    sequence_len = 72
+    # 单次输入模型的帧长度，最好是sequence_len的因数，否则多余的将被丢弃
+    batch_len = 6
     size = (480, 270)
     dataset_loader_workers = 4
+    # 记录权重梯度直方图的batch间隔
     Gradient_intervals = 50
 
     # 数据集和模型保存路径
@@ -84,7 +91,8 @@ if __name__ == '__main__':
     print(f"Discriminator has {num_params_disc:,} trainable parameters.")
     print("Preparing dataset...")
     train_dataset = VideoDataset(root_dir=dataset_path, sequence_length=sequence_len, size=size)
-    train_loader = DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=True,num_workers=dataset_loader_workers, pin_memory=False)
+    train_loader = DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=True,
+                              num_workers=dataset_loader_workers, pin_memory=False)
 
     writer.add_graph(gen, next(iter(train_loader))[0].to(device))
     writer.add_graph(disc, next(iter(train_loader))[1].permute(0, 2, 1, 3, 4).to(device))
@@ -99,26 +107,38 @@ if __name__ == '__main__':
         disc.train()
         with tqdm(total=len(train_loader), desc=f"Epoch {epoch + 1}/{epochs}", unit="batch") as pbar:
             for batch_idx, (masked_seq, clips_seq, mask_seq) in enumerate(train_loader):
-                # masked_seq: [B, T, 4, H, W], clips_seq: [B, T, 3, H, W]
-                masked_seq = masked_seq.to(device)
-                clips_seq = clips_seq.to(device)
-                mask_seq = mask_seq.to(device)
+                for batch_seq in range(int(sequence_len / batch_len)):
+                    # masked_seq: [B, T, 4, H, W], clips_seq: [B, T, 3, H, W]
+                    masked_seq = masked_seq[:, batch_seq * batch_len: (batch_seq + 1) * batch_len, :, :, :].to(device)
+                    clips_seq = clips_seq[:, batch_seq * batch_len: (batch_seq + 1) * batch_len, :, :, :].to(device)
 
-                # disc训练
-                clips_fake, _ = gen(masked_seq)
-                opt_disc.zero_grad()
-                # 将视频维度从[B, T, C, H, W]转换到[B, C, T, H, W]以匹配Conv3d
-                real_clip_for_disc = clips_seq.permute(0, 2, 1, 3, 4)
-                fake_clip_for_disc = clips_fake.permute(0, 2, 1, 3, 4)
-                # 判别器分别推理真实视频与全1张量、虚假视频与全0张量，计算二元交叉熵损失
-                disc_real = disc(real_clip_for_disc)
-                loss_disc_real = adversarial_loss_fn(disc_real, torch.ones_like(disc_real))
-                # 用 .detach() 阻止梯度传回生成器
-                disc_fake = disc(fake_clip_for_disc.detach())
-                loss_disc_fake = adversarial_loss_fn(disc_fake, torch.zeros_like(disc_fake))
-                # 判别器总损失
-                loss_disc = (loss_disc_real + loss_disc_fake) / 2
-                loss_disc.backward()
+                    # gen推理用于disc训练
+                    clips_fake, gen_hidden = gen(masked_seq, None if batch_seq == 0 else gen_hidden)
+                    opt_disc.zero_grad()
+                    # 将视频维度从[B, T, C, H, W]转换到[B, C, T, H, W]以匹配Conv3d
+                    real_clip_for_disc = clips_seq.permute(0, 2, 1, 3, 4)
+                    fake_clip_for_disc = clips_fake.permute(0, 2, 1, 3, 4)
+                    # 判别器分别推理真实视频与全1张量、虚假视频与全0张量，计算二元交叉熵损失
+                    disc_real = disc(real_clip_for_disc)
+                    loss_disc_real = adversarial_loss_fn(disc_real, torch.ones_like(disc_real))
+                    # 用 .detach() 阻止梯度传回生成器
+                    disc_fake = disc(fake_clip_for_disc.detach())
+                    loss_disc_fake = adversarial_loss_fn(disc_fake, torch.zeros_like(disc_fake))
+                    # 判别器总损失
+                    loss_disc = (loss_disc_real + loss_disc_fake) / 2
+                    loss_disc.backward()
+
+                    # 训练生成器
+                    opt_gen.zero_grad()
+                    disc_fake_for_gen = disc(fake_clip_for_disc)
+                    loss_g_adv = adversarial_loss_fn(disc_fake_for_gen, torch.ones_like(disc_fake_for_gen))
+                    loss_g_l1 = l1_loss_fn(clips_fake, clips_seq) * L1_weigth
+                    loss_g = loss_g_adv + loss_g_l1
+                    loss_g.backward()
+
+                    # 分离隐状态截断反向传播
+                    gen_hidden = (gen_hidden[0].detach(), gen_hidden[1].detach())
+
                 # 记录梯度权重
                 if batch_idx % Gradient_intervals == 0:
                     for name, param in disc.named_parameters():
@@ -126,20 +146,14 @@ if __name__ == '__main__':
                             # 使用 f-string 为每个梯度直方图创建唯一的、有组织的标签
                             # 'Gradients/' 会在 TensorBoard 中创建一个名为 Gradients 的分组
                             writer.add_histogram(
-                                tag=f'Grad_disc/{name}',values=param.grad,global_step=epoch * len(train_loader) + batch_idx)
+                                tag=f'Grad_disc/{name}', values=param.grad,
+                                global_step=epoch * len(train_loader) + batch_idx)
                 opt_disc.step()
-
-                # 训练生成器
-                opt_gen.zero_grad()
-                disc_fake_for_gen = disc(fake_clip_for_disc)
-                loss_g_adv = adversarial_loss_fn(disc_fake_for_gen, torch.ones_like(disc_fake_for_gen))
-                loss_g_l1 = l1_loss_fn(clips_fake, clips_seq) * L1_weigth
-                loss_g = loss_g_adv + loss_g_l1
-                loss_g.backward()
                 if batch_idx % Gradient_intervals == 0:
                     for name, param in gen.named_parameters():
                         if param.grad is not None:
-                            writer.add_histogram(tag=f'Grad_gan/{name}',values=param.grad,global_step=epoch * len(train_loader) + batch_idx)
+                            writer.add_histogram(tag=f'Grad_gan/{name}', values=param.grad,
+                                                 global_step=epoch * len(train_loader) + batch_idx)
                 opt_gen.step()
 
                 # 统计记录
@@ -167,7 +181,8 @@ if __name__ == '__main__':
             avg_loss_d = total_loss_d / len(train_loader)
             avg_loss_g_L1 = total_loss_g_L1 / len(train_loader)
             avg_loss_d_adv = total_loss_g_adv / len(train_loader)
-            print(f"--- {datetime.datetime.now():%H:%M:%S}: Epoch {epoch + 1} avg_loss_G: {avg_loss_g:.4f}, avg_loss_D: {avg_loss_d:.4f}, avg_loss_g_L1: {avg_loss_g_L1:.4f}, avg_loss_d_adv: {avg_loss_d_adv:.4f} ---")
+            print(
+                f"--- {datetime.datetime.now():%H:%M:%S}: Epoch {epoch + 1} avg_loss_G: {avg_loss_g:.4f}, avg_loss_D: {avg_loss_d:.4f}, avg_loss_g_L1: {avg_loss_g_L1:.4f}, avg_loss_d_adv: {avg_loss_d_adv:.4f} ---")
 
         pathlib.Path("model_gan").mkdir(parents=True, exist_ok=True)
         torch.save(gen.state_dict(), f"{model_save_dir}/gen_epoch_{epoch + 1}.pth")

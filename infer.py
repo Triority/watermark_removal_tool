@@ -106,7 +106,7 @@ def infer_video_4channel(config):
 
 if __name__ == '__main__':
     inference_config = {
-        "model_path": r"model_gan/gen_epoch_26.pth",
+        "model_path": r"model_gan_2/gen_epoch_9.pth",
         # 这是需要修复的视频，例如视频中某些区域被涂黑或有水印
         "input_video_path": r"D:/Dataset/mask_clips/14938.mp4",
         # 这是对应的单张二值化掩膜图片，白色区域代表需要修复的地方
