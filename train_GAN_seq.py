@@ -47,26 +47,26 @@ if __name__ == '__main__':
     epochs = 100
     batch_size = 1
     # 数据集加载的长度，应为数据集最短帧长度，输入低于此帧长度的数据将会报错
-    sequence_len = 72
+    sequence_len = 24
     # 单次输入模型的帧长度，最好是sequence_len的因数，否则多余的将被丢弃
-    batch_len = 6
+    batch_len = 4
     size = (480, 270)
     dataset_loader_workers = 4
     # 记录权重梯度直方图的batch间隔
     Gradient_intervals = 50
 
     # 数据集和模型保存路径
-    dataset_path = r"D:/Dataset"
-    model_save_dir = r"model_gan_2"
+    dataset_path = r"C:/Dataset"
+    model_save_dir = r"model_gan_3"
     # 继续训练时加载模型路径和已完成轮次，输入0则从零开始训练
-    load_model_epoch = 19
-    load_model_path_gen = r"model_gan_2/gen_epoch_19.pth"
-    load_model_path_disc = r"model_gan_2/disc_epoch_19.pth"
+    load_model_epoch = 0
+    load_model_path_gen = r"model_gan_3/gen_epoch_19.pth"
+    load_model_path_disc = r"model_gan_3/disc_epoch_19.pth"
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"Using device: {device}")
 
-    writer = SummaryWriter('runs/GAN_2')
+    writer = SummaryWriter('runs/GAN_3')
 
     gen = RecurrentUNet(in_channels=4, out_channels=3).to(device)
     disc = VideoDiscriminator(in_channels=3).to(device)
@@ -94,8 +94,8 @@ if __name__ == '__main__':
     train_loader = DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=True,
                               num_workers=dataset_loader_workers, pin_memory=False)
 
-    writer.add_graph(gen, next(iter(train_loader))[0].to(device))
-    writer.add_graph(disc, next(iter(train_loader))[1].permute(0, 2, 1, 3, 4).to(device))
+    #writer.add_graph(gen, next(iter(train_loader))[0].to(device))
+    #writer.add_graph(disc, next(iter(train_loader))[1].permute(0, 2, 1, 3, 4).to(device))
 
     print("Start training...")
     for epoch in range(load_model_epoch, epochs):
@@ -106,11 +106,11 @@ if __name__ == '__main__':
         gen.train()
         disc.train()
         with tqdm(total=len(train_loader), desc=f"Epoch {epoch + 1}/{epochs}", unit="batch") as pbar:
-            for batch_idx, (masked_seq, clips_seq, mask_seq) in enumerate(train_loader):
+            for batch_idx, (masked_seqs, clips_seqs, mask_seqs) in enumerate(train_loader):
                 for batch_seq in range(int(sequence_len / batch_len)):
                     # masked_seq: [B, T, 4, H, W], clips_seq: [B, T, 3, H, W]
-                    masked_seq = masked_seq[:, batch_seq * batch_len: (batch_seq + 1) * batch_len, :, :, :].to(device)
-                    clips_seq = clips_seq[:, batch_seq * batch_len: (batch_seq + 1) * batch_len, :, :, :].to(device)
+                    masked_seq = masked_seqs[:, batch_seq * batch_len: (batch_seq + 1) * batch_len, :, :, :].to(device)
+                    clips_seq = clips_seqs[:, batch_seq * batch_len: (batch_seq + 1) * batch_len, :, :, :].to(device)
 
                     # gen推理用于disc训练
                     clips_fake, gen_hidden = gen(masked_seq, None if batch_seq == 0 else gen_hidden)
