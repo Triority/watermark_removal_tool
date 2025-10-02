@@ -6,10 +6,6 @@ from torch.utils.data import Dataset, DataLoader
 import torch.optim as optim
 import pathlib
 import torchvision
-import datetime
-from tqdm import tqdm
-from torch.utils.tensorboard import SummaryWriter
-
 
 class ConvBlock(nn.Module):
     def __init__(self, in_channels, out_channels):
@@ -35,7 +31,6 @@ class ConvBlock(nn.Module):
     def forward(self, x):
         out = self.convblock(x) + self.shortcut(x)
         return self.final_activation(out)
-
 
 class ConvLSTMCell(nn.Module):
     def __init__(self, input_dim, hidden_dim, kernel_size, bias):
@@ -77,7 +72,6 @@ class ConvLSTMCell(nn.Module):
         height, width = image_size
         return (torch.zeros(batch_size, self.hidden_dim, height, width, device=self.conv.weight.device),
                 torch.zeros(batch_size, self.hidden_dim, height, width, device=self.conv.weight.device))
-
 
 class RecurrentUNet(nn.Module):
     def __init__(self, in_channels=3, out_channels=3, features=[64, 128, 256, 512]):
@@ -150,7 +144,6 @@ class RecurrentUNet(nn.Module):
             outputs.append(frame_output)
 
         return torch.stack(outputs, dim=1), hidden_state
-
 
 class VideoDataset(Dataset):
     def __init__(self, root_dir, sequence_length=10, transform=None, size=(480, 270)):
@@ -227,79 +220,3 @@ class VideoDataset(Dataset):
         return masked_seq, clips_seq, mask_seq
 
 
-if __name__ == '__main__':
-    lr = 1e-4
-    batch_size = 2
-    epochs = 50
-    sequence_len = 4
-    size = (480, 270)
-    dataset_loader_workers = 6
-
-    dataset_path = r"D:/Dataset"
-    # 继续训练时加载模型路径和已完成轮次，路径为空字符串则从零开始训练且设置的轮次无效
-    load_model_path = r"model/epoch_10.pth"
-    load_model_epoch = 10
-
-
-    writer = SummaryWriter(r'runs/gradient_monitoring')
-
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    print(f"Using device: {device}")
-    model = RecurrentUNet(in_channels=4, out_channels=3).to(device)
-    if load_model_path == "":
-        load_model_epoch = 0
-    else:
-        model.load_state_dict(torch.load(load_model_path, map_location=device))
-
-    criterion = nn.L1Loss()
-    optimizer = optim.Adam(model.parameters(), lr=lr)
-
-    num_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
-    print(f"Model has {num_params:,} trainable parameters.")
-
-    print("Preparing dataset...")
-    train_dataset = VideoDataset(root_dir=dataset_path, sequence_length=sequence_len, size=size)
-    train_loader = DataLoader(
-        dataset=train_dataset,
-        batch_size=batch_size,
-        shuffle=True,
-        num_workers=dataset_loader_workers,
-        pin_memory=False)
-
-    print("Start training...")
-    for epoch in range(load_model_epoch, epochs):
-        model.train()
-        total_loss = 0.0
-        with tqdm(total=len(train_loader), desc=f"Epoch {epoch + 1}/{epochs}", unit="batch") as pbar:
-            for batch_idx, (masked_seq, clips_seq, mask_seq) in enumerate(train_loader):
-                masked_seq = masked_seq.to(device)
-                clips_seq = clips_seq.to(device)
-                mask_seq = mask_seq.to(device)
-
-                optimizer.zero_grad()
-                restored_seq, h_last = model(masked_seq)
-
-                loss = criterion(restored_seq, clips_seq)
-                loss.backward()
-
-                for name, param in model.named_parameters():
-                    if param.grad is not None:
-                        # 使用writer.add_scalar来记录，标签格式 'grads/层名' 可以在 TensorBoard 中分组
-                        writer.add_scalar(f'grads/{name}_norm', param.grad.norm(2), epoch)
-                # 记录总的梯度范数，以监控梯度爆炸
-                total_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), float('inf'))
-                writer.add_scalar('grads/total_norm', total_norm, epoch)
-
-                optimizer.step()
-                total_loss += loss.item()
-
-                pbar.set_postfix(loss=f'{loss.item():.4f}')
-                pbar.update(1)
-
-        avg_loss = total_loss / len(train_loader)
-        print(f"--- {datetime.datetime.now():%H:%M:%S}: Epoch {epoch + 1} avg_loss: {avg_loss:.4f} ---")
-
-        torch.save(model.state_dict(), f"model/epoch_{epoch + 1}.pth")
-
-    writer.close()
-    print("Completed!")
