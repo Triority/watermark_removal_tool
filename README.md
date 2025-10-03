@@ -8,13 +8,13 @@
 ```py
 python3 train_GAN_seq.py
 ```
-指定显卡启动训练：
+指定显卡训练：
 ```py
 CUDA_VISIBLE_DEVICES=0 python3 train_GAN_seq.py
 ```
 多显卡并行训练：
 ```py
-
+python3 train_GAN_seq_DDP.py
 ```
 
 ## 文件说明
@@ -24,5 +24,6 @@ CUDA_VISIBLE_DEVICES=0 python3 train_GAN_seq.py
 + `train_GAN_seq.py`：训练过程增加更多输入的帧序列的计算
 + `train_GAN_seq_DDP.py`：加入了多卡并行训练提高训练速度(未验证)
 ### 推理
-
++ `infer.py`：直接进行模型推理
++ `infer_split.py`：针对更大分辨率的视频，将视频分块处理再推理(画饼)
 ### 其他
