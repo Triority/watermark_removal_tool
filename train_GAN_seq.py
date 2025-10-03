@@ -40,33 +40,34 @@ class VideoDiscriminator(nn.Module):
 
 
 if __name__ == '__main__':
-    lr_gen = 2e-4
-    lr_disc = 1e-4
+    lr_gen = 5e-4
+    lr_disc = 5e-4
     L1_weigth = 50
+    D_fake_weigh = 1
 
     epochs = 100
-    batch_size = 1
+    batch_size = 6
     # 数据集加载的长度，应为数据集最短帧长度，输入低于此帧长度的数据将会报错
     sequence_len = 24
     # 单次输入模型的帧长度，最好是sequence_len的因数，否则多余的将被丢弃
-    batch_len = 4
+    batch_len = 6
     size = (480, 270)
     dataset_loader_workers = 4
     # 记录权重梯度直方图的batch间隔
     Gradient_intervals = 50
 
     # 数据集和模型保存路径
-    dataset_path = r"C:/Dataset"
-    model_save_dir = r"model_gan_3"
+    dataset_path = r"/media/B/Triority/Dataset"
+    model_save_dir = r"model_gan"
     # 继续训练时加载模型路径和已完成轮次，输入0则从零开始训练
-    load_model_epoch = 0
-    load_model_path_gen = r"model_gan_3/gen_epoch_19.pth"
-    load_model_path_disc = r"model_gan_3/disc_epoch_19.pth"
+    load_model_epoch = 19
+    load_model_path_gen = r"model_gan/gen_epoch_19.pth"
+    load_model_path_disc = r"model_gan/disc_epoch_19.pth"
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"Using device: {device}")
 
-    writer = SummaryWriter('runs/GAN_3')
+    writer = SummaryWriter('runs/GAN_new')
 
     gen = RecurrentUNet(in_channels=4, out_channels=3).to(device)
     disc = VideoDiscriminator(in_channels=3).to(device)
@@ -94,8 +95,6 @@ if __name__ == '__main__':
     train_loader = DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=True,
                               num_workers=dataset_loader_workers, pin_memory=False)
 
-    #writer.add_graph(gen, next(iter(train_loader))[0].to(device))
-    #writer.add_graph(disc, next(iter(train_loader))[1].permute(0, 2, 1, 3, 4).to(device))
 
     print("Start training...")
     for epoch in range(load_model_epoch, epochs):
@@ -125,7 +124,7 @@ if __name__ == '__main__':
                     disc_fake = disc(fake_clip_for_disc.detach())
                     loss_disc_fake = adversarial_loss_fn(disc_fake, torch.zeros_like(disc_fake))
                     # 判别器总损失
-                    loss_disc = (loss_disc_real + loss_disc_fake) / 2
+                    loss_disc = (loss_disc_real + loss_disc_fake * D_fake_weigh) / (D_fake_weigh + 1)
                     loss_disc.backward()
 
                     # 训练生成器

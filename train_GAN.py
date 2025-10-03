@@ -41,25 +41,25 @@ if __name__ == '__main__':
     lr_disc = 1e-4
     L1_weigth = 50
 
-    batch_size = 1
+    batch_size = 8
     epochs = 100
-    sequence_len = 6
+    sequence_len = 4
     size = (480, 270)
     dataset_loader_workers = 4
     Gradient_intervals = 50
 
     # 数据集和模型保存路径
-    dataset_path = r"D:/Dataset"
-    model_save_dir = r"model_gan_2"
+    dataset_path = r"/media/B/Triority/Dataset"
+    model_save_dir = r"model_gan_old"
     # 继续训练时加载模型路径和已完成轮次，输入0则从零开始训练
-    load_model_epoch = 19
+    load_model_epoch = 0
     load_model_path_gen = r"model_gan_2/gen_epoch_19.pth"
     load_model_path_disc = r"model_gan_2/disc_epoch_19.pth"
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"Using device: {device}")
 
-    writer = SummaryWriter('runs/GAN_2')
+    writer = SummaryWriter('runs/GAN_old')
 
     gen = RecurrentUNet(in_channels=4, out_channels=3).to(device)
     disc = VideoDiscriminator(in_channels=3).to(device)
