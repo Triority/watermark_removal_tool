@@ -7,4 +7,3 @@ model*/*
 runs
 *.mp4
 __pycache__
-model-tanh

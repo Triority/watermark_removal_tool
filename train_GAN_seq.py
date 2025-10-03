@@ -40,14 +40,15 @@ class VideoDiscriminator(nn.Module):
 
 
 if __name__ == '__main__':
-    lr_gen = 2e-4
-    lr_disc = 1e-4
+    lr_gen = 5e-4
+    lr_disc = 5e-4
     L1_weigth = 50
+    D_fake_weigh = 1
 
     epochs = 100
-    batch_size = 1
+    batch_size = 6
     # 数据集加载的长度，应为数据集最短帧长度，输入低于此帧长度的数据将会报错
-    sequence_len = 72
+    sequence_len = 24
     # 单次输入模型的帧长度，最好是sequence_len的因数，否则多余的将被丢弃
     batch_len = 6
     size = (480, 270)
@@ -123,7 +124,7 @@ if __name__ == '__main__':
                     disc_fake = disc(fake_clip_for_disc.detach())
                     loss_disc_fake = adversarial_loss_fn(disc_fake, torch.zeros_like(disc_fake))
                     # 判别器总损失
-                    loss_disc = (loss_disc_real + loss_disc_fake) / 2
+                    loss_disc = (loss_disc_real + loss_disc_fake * D_fake_weigh) / (D_fake_weigh + 1)
                     loss_disc.backward()
 
                     # 训练生成器
