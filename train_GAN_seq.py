@@ -10,7 +10,7 @@ import datetime
 from tqdm import tqdm
 from torch.utils.tensorboard import SummaryWriter
 
-from model import RecurrentUNet, VideoDataset
+from train import RecurrentUNet, VideoDataset
 
 
 class VideoDiscriminator(nn.Module):
