@@ -17,18 +17,9 @@ from torch.utils.data.distributed import DistributedSampler
 import os
 from collections import OrderedDict
 
-from model import RecurrentUNet, VideoDataset
+from train import RecurrentUNet, VideoDataset
 from train_GAN_seq import VideoDiscriminator
 
-
-def setup(rank, world_size):
-    """初始化分布式进程组"""
-    os.environ['MASTER_ADDR'] = 'localhost'
-    os.environ['MASTER_PORT'] = '12355'
-    dist.init_process_group("nccl", rank=rank, world_size=world_size)
-
-def cleanup():
-    dist.destroy_process_group()
 
 def main_worker(rank, world_size, args):
     """
@@ -38,7 +29,9 @@ def main_worker(rank, world_size, args):
     args: 包含所有参数的字典
     """
     print(f"Running DDP on rank {rank}.")
-    setup(rank, world_size)
+    os.environ['MASTER_ADDR'] = 'localhost'
+    os.environ['MASTER_PORT'] = '12355'
+    dist.init_process_group("nccl", rank=rank, world_size=world_size)
 
     # 每个进程只在自己的 GPU 上工作
     device = rank
@@ -112,6 +105,7 @@ def main_worker(rank, world_size, args):
         pbar = tqdm(total=len(train_loader), desc=f"Epoch {epoch + 1}/{args['epochs']}", unit="batch", disable=rank!=0)
 
         for batch_idx, (masked_seqs, clips_seqs, mask_seqs) in enumerate(train_loader):
+            # 将长序列分割成多个小批次进行处理
             for batch_seq in range(int(args['sequence_len'] / args['batch_len'])):
                 masked_seq = masked_seqs[:, batch_seq * args['batch_len']: (batch_seq + 1) * args['batch_len'], :, :, :].to(device)
                 clips_seq = clips_seqs[:, batch_seq * args['batch_len']: (batch_seq + 1) * args['batch_len'], :, :, :].to(device)
@@ -126,6 +120,7 @@ def main_worker(rank, world_size, args):
                 loss_disc_fake = adversarial_loss_fn(disc_fake, torch.zeros_like(disc_fake))
                 loss_disc = (loss_disc_real + loss_disc_fake ) / 2
                 loss_disc.backward()
+                opt_disc.step()
 
                 opt_gen.zero_grad()
                 disc_fake_for_gen = disc(fake_clip_for_disc)
@@ -135,10 +130,7 @@ def main_worker(rank, world_size, args):
                 loss_g.backward()
 
                 gen_hidden = (gen_hidden[0].detach(), gen_hidden[1].detach())
-            
-            # DDP 会自动同步所有进程的梯度，然后才执行 step
-            opt_disc.step()
-            opt_gen.step()
+                opt_gen.step()
             
             # 日志记录和统计 (仅在主进程中执行)
             if rank == 0:
@@ -167,8 +159,6 @@ def main_worker(rank, world_size, args):
                 pbar.set_postfix(
                     D_real=f'{loss_disc_real.item():.4f}',
                     D_fake=f'{loss_disc_fake.item():.4f}',
-                    Loss_D=f'{loss_disc.item():.4f}',
-                    Loss_G=f'{loss_g.item():.4f}',
                     G_adv=f'{loss_g_adv.item():.4f}',
                     G_L1=f'{loss_g_l1.item():.4f}')
                 pbar.update(1)
@@ -194,27 +184,27 @@ def main_worker(rank, world_size, args):
     if rank == 0:
         writer.close()
         print("Completed!")
-    cleanup()
+    dist.destroy_process_group()
 
 if __name__ == '__main__':
     args = {
-        'lr_gen': 3e-4,
-        'lr_disc': 3e-4,
+        'lr_gen': 5e-4,
+        'lr_disc': 5e-4,
         'L1_weigth': 50,
         'epochs': 100,
         'batch_size': 6,
-        'sequence_len': 24,
+        'sequence_len': 18,
         'batch_len': 6,
         'size': (480, 270),
-        'dataset_loader_workers': 1,
+        'dataset_loader_workers': 2,
         'Gradient_intervals': 50,
         'dataset_path': r"/media/B/Triority/Dataset",
-        'model_save_dir': r"model_gan",
-        'load_model_epoch': 19,
-        'load_model_path_gen': r"model_gan/gen_epoch_19.pth",
-        'load_model_path_disc': r"model_gan/disc_epoch_19.pth",
+        'model_save_dir': r"model_gan_try",
+        'load_model_epoch': 0,
+        'load_model_path_gen': r"model_gan/gen_epoch_56.pth",
+        'load_model_path_disc': r"model_gan/disc_epoch_56.pth",
         'load_model_add_.model': True,
-        'summary_writer': 'runs/GAN_DDP'
+        'summary_writer': 'runs/GAN_DDP_try'
     }
 
     world_size = torch.cuda.device_count()

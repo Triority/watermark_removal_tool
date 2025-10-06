@@ -238,7 +238,7 @@ if __name__ == '__main__':
     dataset_path = r"D:/Dataset"
     # 继续训练时加载模型路径和已完成轮次，路径为空字符串则从零开始训练且设置的轮次无效
     load_model_path = r"model/epoch_10.pth"
-    load_model_epoch = 10
+    load_model_epoch = 0
 
 
     writer = SummaryWriter(r'runs/gradient_monitoring')
