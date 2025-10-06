@@ -4,16 +4,21 @@
 ## 运行效果
 
 ## 启动命令
+定时刷新nvidia-smi：
+```
+watch -n 1 nvidia-smi
+```
+### 训练
 直接启动：
-```py
+```
 python3 train_GAN_seq.py
 ```
 指定显卡训练：
-```py
+```
 CUDA_VISIBLE_DEVICES=0 python3 train_GAN_seq.py
 ```
 多显卡并行训练：
-```py
+```
 python3 train_GAN_seq_DDP.py
 ```
 
@@ -27,3 +32,15 @@ python3 train_GAN_seq_DDP.py
 + `infer.py`：直接进行模型推理
 + `infer_split.py`：针对更大分辨率的视频，将视频分块处理再推理(画饼)
 ### 其他
+
+
+## 可能的问题
+### 训练中断导致显卡未释放
+查看python进程pid
+```
+ps ax
+```
+关闭进程
+```
+kill -p <pid>
+```
