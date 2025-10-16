@@ -52,7 +52,7 @@ python3 train_GAN_seq.py
 ```
 CUDA_VISIBLE_DEVICES=0 python3 train_GAN_seq.py
 ```
-多显卡并行训练：
+多显卡并行训练DDP：
 ```
 python3 train_GAN_seq_DDP.py
 ```
@@ -62,14 +62,18 @@ python3 train_GAN_seq_DDP.py
 + `train.py`：定义了u-net+LSTM网络，并直接进行训练
 + `train_GAN.py`：定义了一个三维卷积网络作为判别器进行对抗训练
 + `train_GAN_seq.py`：训练过程增加更多输入的帧序列的计算
-+ `train_GAN_seq_DDP.py`：加入了多卡并行训练提高训练速度(未验证)
++ `train_GAN_seq_DDP.py`：加入了多卡并行训练提高训练速度
++ `train_VideoMask.py`：水印改为动态的水印视频，继承了前面的seq和GAN
++ 
 ### 推理
 + `infer.py`：直接进行模型推理
 + `infer_split.py`：针对更大分辨率的视频，将视频分块处理再推理(画饼)
++ 
 ### 数据集处理
 + `video2img.py`：视频转图片
 + `video_mask.py`：生成带有白色文字水印的数据集
 + `mp4v_2_vc09.py`：视频编码从mpv4转换为vc09，使浏览器支持解码播放
++ `video2video.py`：生成带有白色动态内容水印的数据集
 
 ## 可能的问题
 ### 训练中断导致显卡未释放

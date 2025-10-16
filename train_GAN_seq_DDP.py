@@ -186,23 +186,24 @@ def main_worker(rank, world_size, args):
         print("Completed!")
     dist.destroy_process_group()
 
+
 if __name__ == '__main__':
     args = {
-        'lr_gen': 5e-4,
-        'lr_disc': 5e-4,
+        'lr_gen': 1e-4,
+        'lr_disc': 1e-4,
         'L1_weigth': 50,
-        'epochs': 100,
+        'epochs': 110,
         'batch_size': 6,
-        'sequence_len': 18,
-        'batch_len': 6,
+        'sequence_len': 16,
+        'batch_len': 4,
         'size': (480, 270),
         'dataset_loader_workers': 2,
         'Gradient_intervals': 50,
-        'dataset_path': r"/media/B/Triority/Dataset",
+        'dataset_path': r"D:\Dataset",
         'model_save_dir': r"model_gan_try",
-        'load_model_epoch': 0,
-        'load_model_path_gen': r"model_gan/gen_epoch_56.pth",
-        'load_model_path_disc': r"model_gan/disc_epoch_56.pth",
+        'load_model_epoch': 100,
+        'load_model_path_gen': r"model_gan/gen_epoch_100.pth",
+        'load_model_path_disc': r"model_gan/disc_epoch_100.pth",
         'load_model_add_.model': True,
         'summary_writer': 'runs/GAN_DDP_try'
     }
